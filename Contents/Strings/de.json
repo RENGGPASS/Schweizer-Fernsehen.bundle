@@ -1,5 +1,8 @@
 {
-    "Previous Month": "Voriger Monat",
-    "No Episodes": "Keine Sendungen vorhanden",
-    "This show has no episodes available.": "Für diese Sendung sind im Moment keine Videos verfügbar."
+  "Title": "SRF Podcast",
+  "MoreItems": "Weitere Episoden...",
+  "Alle TV-Sendungen": "Alle TV-Sendungen",
+  "There are no shows available.": "Es wurden keine Shows gefunden.",
+  "There are no episodes available.": "Es wurden keine Episoden gefunden.",
+  "Empty": "Leer"
 }
