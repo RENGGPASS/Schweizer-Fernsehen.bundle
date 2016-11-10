@@ -4,13 +4,24 @@
 <dict>
 	<key>CFBundleIdentifier</key>
 	<string>com.plexapp.plugins.schweizerfernsehen</string>
-	<key>PlexClientPlatforms</key>
-	<string>*</string>
+	<key>PlexPluginClass</key>
+	<string>Content</string>
 	<key>PlexFrameworkVersion</key>
 	<string>2</string>
-	<key>PlexFrameworkFlags</key>
+	<!-- Channel 9 serves MP4 videos which are supported on all platforms -->
+	<key>PlexClientPlatforms</key>
+	<string>*</string>
+	<key>PlexAudioCodec</key>
 	<array>
-		<string>UseRealRTMP</string>
+		<string>AAC</string>
+	</array>
+	<key>PlexVideoCodec</key>
+	<array>
+		<string>H.264</string>
+	</array>
+	<key>PlexMediaContainer</key>
+	<array>
+		<string>MP4</string>
 	</array>
 </dict>
 </plist>

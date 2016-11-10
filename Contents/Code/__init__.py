@@ -1,133 +1,112 @@
 # -*- coding: utf-8 -*-
 
-SF_ROOT     = 'http://www.srf.ch'
-SF_SHOWS    = SF_ROOT + '/player/tv/sendungen'
-SF_CHANNELS = SF_ROOT + '/player/tv/channels'
-SF_SEARCH   = SF_ROOT + '/player/tv/suche'
+PREFIX = '/video/schweizerfernsehen'
+NAME = L('Title')
+ART = 'art.png'
+ICON = 'icon.png'
 
-TITLE       = 'Schweizer Fernsehen'
+API_BASE = 'http://www.srf.ch/podcasts'
+API_DIR = 'http://www.srf.ch/play/tv/episodesfromshow?layout=json&id='
+API_ITEM = 'https://il.srgssr.ch/integrationlayer/1.0/ue/srf/video/play/%s.json'
 
-REGEX_IMAGE_SUB = Regex('width=\d+')
-MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli",
-          "August", "September", "Oktober", "November", "Dezember"]
-
-####################################################################################################
+###############################################################################
 def Start():
-    Plugin.AddPrefixHandler('/video/schweizerfernsehen', MainMenu, TITLE)
-    Plugin.AddViewGroup('InfoList', viewMode = 'InfoList', mediaType = 'items')
 
-    ObjectContainer.title1 = TITLE
-    ObjectContainer.view_group = 'InfoList'
+    ObjectContainer.title1 = NAME
+    DirectoryObject.thumb = R(ICON)
 
     HTTP.CacheTime = CACHE_1HOUR
 
+    VideoClipObject.thumb = R(ICON)
+    VideoClipObject.art = R(ART)
+
+
 ####################################################################################################
-def MainMenu():
-    oc = ObjectContainer()
+# Main Menu is static
+@handler(PREFIX, NAME, art=ART, thumb=ICON)
+def VideoMainMenu():
 
-    page = HTML.ElementFromURL(SF_SHOWS)
+    oc = ObjectContainer(title1=L('Title'))
 
-    for show in page.xpath('//li[contains(@class, "az_item")]'):
-        url = show.xpath('./a')[0].get('href')
-        if url.startswith('http://') == False:
-            url = SF_ROOT + url
-
-        title = show.xpath('.//a[@class="sendung_name"]/text()')[0]
-        thumb = show.xpath('.//img')[0].get('src')
-        thumbs = [ REGEX_IMAGE_SUB.sub(thumb, 'width=500'), thumb ]
-
-        description = None
-        try: description = show.xpath('./p[@class="az_description"]/text()')[0]
-        except: pass
-
-        oc.add(DirectoryObject(
-            key = Callback(EpisodeMenu, title = title, url = url),
-            title = title,
-            summary = description,
-            thumb = Resource.ContentsOfURLWithFallback(thumbs)))
+    oc.add(DirectoryObject(key=Callback(SubMenu, title=L('Alle TV-Sendungen'), url='pt-tv'), title=L('Alle TV-Sendungen')))
+    oc.add(DirectoryObject(key=Callback(SubMenu, title='SRF 1', url='pr-srf-1'), title='SRF 1'))
+    oc.add(DirectoryObject(key=Callback(SubMenu, title='SRF zwei', url='pr-srf-2'), title='SRF zwei'))
+    oc.add(DirectoryObject(key=Callback(SubMenu, title='SRF info', url='pr-srf-info'), title='SRF info'))
 
     return oc
 
+
 ####################################################################################################
-def EpisodeMenu(title, url):
-    oc = ObjectContainer(title2 = title)
+# List shows of the selected channel
+@route(PREFIX + '/submenu')
+def SubMenu(title, url):
 
+    oc = ObjectContainer(title1=L('Title'), title2=title)
+
+    # Search data for the choosen channel
     try:
-        for ep in readEpisodes(url):
-            oc.add(ep)
-    except IndexError:
-        pass
+        source = HTML.ElementFromURL(API_BASE)
+    except Exception as e:
+        Log.Error(e)
+        return ObjectContainer(header=L('Empty'), message=L('There are no shows available.'))
 
-    if len(oc) == 0 and 'period=' not in url:
-        return ObjectContainer(
-            header = unicode(Locale.LocalString("No Episodes")),
-            message =  unicode(Locale.LocalString("This show has no episodes available.")))
+    # Select all available shows
+    shows = source.xpath('//li[contains(@data-filter-options,"'+ url + '")]')
 
-    # Add a link to the previous months content...
-    page = HTML.ElementFromURL(url)
-    try:
-        if 'period=' in url:
-            year_month = url.split('period=')[1]
-            (year, month) = map(lambda x: int(x), year_month.split('-'))
-        else:
-            month_year = ''.join(page.xpath('//div[@id = "act_month_year"]/text()'))
-            (month, year) = month_year.split(' ')
-            now = Datetime.Now()
-            year = int(year)
-            month = MONTHS.index(month) + 1
+    # Filter the avaiable shows by the choosen channel
+    for show in shows:
 
-        if month == 1:
-            month = 12
-            year = year - 1
-        else:
-            month = month - 1
+        show_title = show.xpath('./a/img')[0].get('title')
+        show_summary = show.xpath('./div[@class="module-content"]/p')[0].text
+        show_thumb = show.xpath('./a/img')[0].get('data-retina-src') # better quality than data-origina-src
+        show_id = show.xpath('.//a[contains(@class, "itunes")]')[0].get('href')[-40:][:-4] # we need the guid from the url
 
-        if 'period=' in url:
-            previous_url = Regex('period=\d+-\d+').sub('period=%d-%d' % (year, month), url)
-        else:
-            previous_url = url + "&period=%d-%d" % (year, month)
-
-        oc.add(DirectoryObject(
-            key = Callback(EpisodeMenu, title = title, url = previous_url),
-            title =  Locale.LocalString("Previous Month")))
-
-    except: pass
+        oc.add(TVShowObject(
+            key=Callback(GetDirectory, title=show_title, id=show_id),
+            rating_key=show_id,
+            title=show_title,
+            summary=show_summary,
+            thumb=Resource.ContentsOfURLWithFallback(show_thumb))
+        )
 
     return oc
 
-def readEpisodes(url):
-    episodes = []
-    page = HTML.ElementFromURL(url)
-    show = page.xpath('//div[@class = "sendung_info_right"]/h1[@class = "title"]/text()')[0]
 
-    # The most recent episode (likely to just be one)
-    for episode in page.xpath('//li[@class = "sendung_item"]'):
-        episode_url = episode.xpath('.//a')[1].get('href')
-        if episode_url.startswith('http://') == False:
-            episode_url = SF_ROOT + episode_url
+####################################################################################################
+# List episodes of the selected show
+@route(PREFIX + '/directory')
+def GetDirectory(title, id, page=1):
 
-        title = ''.join(episode.xpath('.//h3[@class="title"]/text()'))
+    oc = ObjectContainer(title1=L('Title'), title2=title)
+
+    url = API_DIR + id + '&pageNumber=' + str(page)
+    try:
+        feed = JSON.ObjectFromURL(url, cacheTime=None)
+    except Exception as e:
+        Log.Error(e)
+        return ObjectContainer(header=L('Empty'), message=L('There are no episodes available.'))
+
+    pages = int(feed['maxPageNumber'])
+    nextpage = str(int(page) + 1)
+
+    for item in feed['episodes']:
+
         try:
-            title += ' ' + ''.join(episode.xpath('.//div[@class="title_date"]/text()'))
+            item_id = item['assets'][0]['url'][-36:]
         except:
             pass
-        thumb = episode.xpath('.//img')[0].get('data-src2x')
-        thumbs = [ REGEX_IMAGE_SUB.sub('width=500', thumb), thumb ]
 
-        description = ''.join(episode.xpath('.//div[@class="description"]/text()'))
+        url = API_ITEM %item_id
 
-        episodes.append(EpisodeObject(
-            url = episode_url,
-            show = show,
-            title = title,
-            summary = description,
-            thumb = Resource.ContentsOfURLWithFallback(thumbs)))
+        oc.add(VideoClipObject(
+            url = url,
+            title = item['title'],
+            summary = item['description'],
+            thumb = Resource.ContentsOfURLWithFallback(item['imageUrl'])
+        ))
 
-    # get paged content for current month
-    try:
-        url = page.xpath('.//a[contains(@class, "next_page")]')[0].get('href')
-        return episodes + readEpisodes(SF_ROOT + url)
-    except:
-        pass
+    # Add page break
+    if page < pages:
+        oc.add(NextPageObject(key=Callback(GetDirectory, title=title, id=id, page=nextpage), title=L('MoreItems')))
 
-    return episodes
+    return oc
