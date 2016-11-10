@@ -2,8 +2,8 @@
 
 PREFIX = '/video/schweizerfernsehen'
 NAME = L('Title')
-ART = 'art.png'
-ICON = 'icon.png'
+ART = 'art-default.jpg'
+ICON = 'icon-default.jpg'
 
 API_BASE = 'http://www.srf.ch/podcasts'
 API_DIR = 'http://www.srf.ch/play/tv/episodesfromshow?layout=json&id='
